@@ -2,78 +2,78 @@ import * as THREE from 'three';
 import { auth, login, db } from './firebase.js';
 import { ref, onValue } from "firebase/database";
 import { initControls, updateControls } from './controls.js';
+import { initEditor } from './editor.js';
 
 // --- グローバル変数 ---
 let scene, camera, renderer, clock;
 let isGameStarted = false;
-const ADMIN_UID = "YOUR_ACTUAL_FIREBASE_UID"; // 自分のUIDをここに入れる
+
+// あなたのUID（後で書き換えてください）
+const ADMIN_UID = "YOUR_ACTUAL_FIREBASE_UID"; 
 
 // --- 1. 初期化 ---
 function init() {
-    // 3Dシーンとフォグ（霧）の設定
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050505);
     scene.fog = new THREE.Fog(0x050505, 0, 50);
 
-    // カメラ設定（FPS視点）
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.y = 1.6;
+    camera.position.set(0, 1.6, 0);
 
-    // レンダラー設定
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 重い場合は2までに制限
     document.getElementById('game-container').appendChild(renderer.domElement);
 
-    // 時間管理用の時計
     clock = new THREE.Clock();
 
-    // イベントリスナー
+    // イベント
     window.addEventListener('resize', onWindowResize);
     document.getElementById('btn-login').addEventListener('click', handleLogin);
     
-    // 管理者用：@キー（またはEキー）でエディタ開閉
+    // PC/モバイル共通：エディタ表示用の隠しコマンド（画面端を3回タップ等に変更も可能）
     document.addEventListener('keydown', (e) => {
         if (e.key === '@' || e.code === 'KeyE') toggleEditor();
     });
 }
 
-// --- 2. ログイン後の処理 ---
+// --- 2. ログイン処理 ---
 async function handleLogin() {
     const user = await login();
     if (user) {
-        // UIの切り替え
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('hud').style.display = 'block';
         document.getElementById('player-name').textContent = user.displayName;
         
-        // 操作系の初期化
+        // 各種システムの起動
         initControls(camera, renderer.domElement);
+        initEditor(); // エディタ機能を有効化
         
-        // FirebaseからLevel0（最初のディレクトリ）を読み込む
-        loadLevel("Level0");
+        loadLevelFromDirectory("Level0");
         
         isGameStarted = true;
-        console.log("DIRECTORYに接続しました。");
+        console.log("DIRECTORYへの接続が承認されました。");
     }
 }
 
-// --- 3. ディレクトリ（レベルコード）の読み込み ---
-function loadLevel(levelId) {
+// --- 3. Firebaseからレベルを読み込む ---
+function loadLevelFromDirectory(levelId) {
     const levelRef = ref(db, `project_files/levels/${levelId}/content`);
     
     onValue(levelRef, async (snapshot) => {
         const code = snapshot.val();
         if (code) {
-            // エディタに最新コードを反映
+            // エディタのテキストエリアを更新
             const editorTextarea = document.getElementById('editor-textarea');
             if (editorTextarea) editorTextarea.value = code;
 
-            // 既存のオブジェクト（カメラ以外）を削除して再構築
-            scene.children = scene.children.filter(c => c instanceof THREE.Camera || c instanceof THREE.Light);
+            // カメラとライト以外の古い世界を消去
+            scene.children = scene.children.filter(c => 
+                c instanceof THREE.Camera || c instanceof THREE.Light
+            );
 
             try {
-                // コードをJavaScriptとして実行
+                // 文字列コードをブラウザで実行可能な形式に変換
                 const blob = new Blob([code], { type: 'application/javascript' });
                 const url = URL.createObjectURL(blob);
                 const module = await import(url);
@@ -82,21 +82,19 @@ function loadLevel(levelId) {
                     module.init(scene, THREE);
                 }
             } catch (err) {
-                console.error("ディレクトリの展開に失敗:", err);
+                console.error("DIRECTORYコードの展開エラー:", err);
             }
         }
     });
 }
 
-// --- 4. 管理者エディタの表示切替 ---
+// --- 4. 管理者用パネルの表示 ---
 function toggleEditor() {
-    if (auth.currentUser?.uid !== ADMIN_UID) return;
+    if (!auth.currentUser || auth.currentUser.uid !== ADMIN_UID) return;
 
     const panel = document.getElementById('admin-panel');
     const isVisible = panel.style.display === 'flex';
     panel.style.display = isVisible ? 'none' : 'flex';
-    
-    // エディタ表示中は操作を無効化するなどの処理をここに追加可能
 }
 
 // --- 5. ループとリサイズ ---
@@ -111,16 +109,17 @@ function animate() {
     
     if (isGameStarted) {
         const delta = clock.getDelta();
-        updateControls(delta); // controls.js の移動処理を呼び出し
+        
+        // 移動処理 (controls.js)
+        updateControls(delta);
         
         renderer.render(scene, camera);
         
-        // HUDの座標更新
+        // 座標HUD更新
         document.getElementById('coords').textContent = 
-            `LOC: X=${camera.position.x.toFixed(2)}, Z=${camera.position.z.toFixed(2)}`;
+            `LOC: X=${camera.position.x.toFixed(1)}, Z=${camera.position.z.toFixed(1)}`;
     }
 }
 
-// 起動
 init();
 animate();
