@@ -1,125 +1,107 @@
 import * as THREE from 'three';
-import { auth, login, db } from './firebase.js';
-import { ref, onValue } from "firebase/database";
+import { login, auth, db } from './firebase.js';
+import { ref, get } from "firebase/database";
 import { initControls, updateControls } from './controls.js';
-import { initEditor } from './editor.js';
+import { initPlayerSync } from './player.js'; // 100人同期用
 
-// --- グローバル変数 ---
+// --- 構成設定 ---
+const ADMIN_UID = "X6QCzADDeRetYZE9vXEDGYDK3r43"; // あなたのUID
 let scene, camera, renderer, clock;
 let isGameStarted = false;
-
-// あなたのUID（後で書き換えてください）
-const ADMIN_UID = "YOUR_ACTUAL_FIREBASE_UID"; 
+let syncPosition = null;
 
 // --- 1. 初期化 ---
 function init() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050505);
-    scene.fog = new THREE.Fog(0x050505, 0, 50);
+    scene.background = new THREE.Color(0x000000);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.6, 0);
+    camera.position.set(0, 1.7, 5);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 重い場合は2までに制限
-    document.getElementById('game-container').appendChild(renderer.domElement);
+    document.body.appendChild(renderer.domElement);
 
     clock = new THREE.Clock();
 
-    // イベント
-    window.addEventListener('resize', onWindowResize);
-    document.getElementById('btn-login').addEventListener('click', handleLogin);
-    
-    // PC/モバイル共通：エディタ表示用の隠しコマンド（画面端を3回タップ等に変更も可能）
-    document.addEventListener('keydown', (e) => {
-        if (e.key === '@' || e.code === 'KeyE') toggleEditor();
-    });
+    // ログインボタンのイベント
+    const loginBtn = document.getElementById('login-btn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', handleLogin);
+    }
+
+    animate();
 }
 
 // --- 2. ログイン処理 ---
 async function handleLogin() {
     const user = await login();
     if (user) {
-        document.getElementById('login-overlay').style.display = 'none';
-        document.getElementById('hud').style.display = 'block';
-        document.getElementById('player-name').textContent = user.displayName;
+        console.log("Logged in as:", user.displayName);
+        document.getElementById('ui-overlay').style.display = 'none';
         
-        // 各種システムの起動
+        // コントロール（移動）の有効化
         initControls(camera, renderer.domElement);
-        initEditor(); // エディタ機能を有効化
         
+        // ★100人同期の開始
+        syncPosition = initPlayerSync(scene, camera);
+        
+        // FirebaseからLevel 0を読み込む
         loadLevelFromDirectory("Level0");
         
         isGameStarted = true;
-        console.log("DIRECTORYへの接続が承認されました。");
     }
 }
 
-// --- 3. Firebaseからレベルを読み込む ---
-function loadLevelFromDirectory(levelId) {
-    const levelRef = ref(db, `project_files/levels/${levelId}/content`);
-    
-    onValue(levelRef, async (snapshot) => {
-        const code = snapshot.val();
-        if (code) {
-            // エディタのテキストエリアを更新
-            const editorTextarea = document.getElementById('editor-textarea');
-            if (editorTextarea) editorTextarea.value = code;
-
-            // カメラとライト以外の古い世界を消去
-            scene.children = scene.children.filter(c => 
-                c instanceof THREE.Camera || c instanceof THREE.Light
-            );
-
-            try {
-                // 文字列コードをブラウザで実行可能な形式に変換
-                const blob = new Blob([code], { type: 'application/javascript' });
-                const url = URL.createObjectURL(blob);
-                const module = await import(url);
-                
-                if (module.init) {
-                    module.init(scene, THREE);
-                }
-            } catch (err) {
-                console.error("DIRECTORYコードの展開エラー:", err);
-            }
+// --- 3. ディレクトリ（Firebase）からレベルを読み込む ---
+async function loadLevelFromDirectory(levelName) {
+    const levelRef = ref(db, `project_files/levels/${levelName}/content`);
+    try {
+        const snapshot = await get(levelRef);
+        if (snapshot.exists()) {
+            const code = snapshot.val();
+            // 取得したコードを実行してステージを生成
+            const runLevel = new Function('scene', 'THREE', code);
+            runLevel(scene, THREE);
+            console.log(`${levelName} loaded successfully.`);
+        } else {
+            console.error("Level data not found in Firebase.");
         }
-    });
+    } catch (error) {
+        console.error("Error loading level:", error);
+    }
 }
 
-// --- 4. 管理者用パネルの表示 ---
-function toggleEditor() {
-    if (!auth.currentUser || auth.currentUser.uid !== ADMIN_UID) return;
-
-    const panel = document.getElementById('admin-panel');
-    const isVisible = panel.style.display === 'flex';
-    panel.style.display = isVisible ? 'none' : 'flex';
-}
-
-// --- 5. ループとリサイズ ---
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
+// --- 4. ループ処理 ---
 function animate() {
     requestAnimationFrame(animate);
     
     if (isGameStarted) {
         const delta = clock.getDelta();
-        
-        // 移動処理 (controls.js)
         updateControls(delta);
+        
+        // ★自分の位置をFirebaseへ送信
+        if (syncPosition) syncPosition();
         
         renderer.render(scene, camera);
         
-        // 座標HUD更新
-        document.getElementById('coords').textContent = 
-            `LOC: X=${camera.position.x.toFixed(1)}, Z=${camera.position.z.toFixed(1)}`;
+        // 管理者ならHUDを表示（オプション）
+        if (auth.currentUser?.uid === ADMIN_UID) {
+            updateAdminHUD();
+        }
     }
 }
 
+function updateAdminHUD() {
+    // 座標などを表示する処理（必要なら追加）
+}
+
+// 起動
 init();
-animate();
+
+// 画面リサイズ対応
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
