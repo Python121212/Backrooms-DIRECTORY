@@ -1,1 +1,13 @@
+{
+  "name": "backrooms-directory",
+  "version": "1.0.0",
+  "description": "Backrooms MMO Directory",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve .",
+    "build": "echo 'No build needed'"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
 
