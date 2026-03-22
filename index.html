@@ -4,115 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Backrooms: DIRECTORY</title>
-    <style>
-        /* 基本スタイル：画面いっぱいにゲームを表示 */
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; }
-
-        /* UIレイヤー：Three.jsの上に重なる要素 */
-        #ui-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* 下の3D操作を邪魔しない */
-            color: #d1d1d1;
-        }
-
-        /* ログインオーバーレイ */
-        #login-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(10, 10, 10, 0.9);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            pointer-events: auto;
-            z-index: 100;
-        }
-
-        #login-screen h1 {
-            font-size: 3rem; color: #dbd28e; letter-spacing: 5px; margin-bottom: 20px;
-            text-shadow: 0 0 10px rgba(219, 210, 142, 0.5);
-        }
-
-        .btn {
-            background: #222; border: 1px solid #dbd28e; color: #dbd28e;
-            padding: 15px 30px; font-size: 1.2rem; cursor: pointer;
-            transition: 0.3s;
-        }
-        .btn:hover { background: #dbd28e; color: #000; }
-
-        /* 管理者用：ゲーム内VSコード風エディタ */
-        #admin-editor {
-            position: absolute;
-            top: 0; right: -50%; /* 右側に隠す */
-            width: 50%; height: 100%;
-            background: #1e1e1e; border-left: 2px solid #333;
-            pointer-events: auto;
-            transition: right 0.4s cubic-bezier(0.1, 0.7, 0.1, 1);
-            z-index: 50;
-            display: flex; flex-direction: column;
-        }
-        #admin-editor.open { right: 0; }
-
-        .editor-header {
-            background: #2d2d2d; padding: 10px; display: flex; justify-content: space-between;
-            font-size: 12px; border-bottom: 1px solid #444;
-        }
-
-        #code-area { flex-grow: 1; outline: none; background: transparent; color: #9cdcfe; 
-                     border: none; padding: 20px; font-family: monospace; font-size: 14px; resize: none; }
-
-        /* HUD（状態表示） */
-        #hud { position: absolute; bottom: 20px; left: 20px; font-size: 14px; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #333; margin-right: 5px; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="game-canvas"></div>
+    <div id="game-container"></div>
 
-    <div id="ui-container">
+    <div id="ui-wrapper">
         
-        <div id="login-screen">
-            <h1>Backrooms: DIRECTORY</h1>
-            <p>100 PLAYERS | PROXIMITY VOICE | LIVE SCRIPTS</p>
-            <button class="btn" id="btn-google-login">GOOGLEアカウントでログイン</button>
-            <p style="margin-top: 20px; font-size: 12px;">※ボイスチャットはログイン後に有効化されます</p>
-        </div>
-
-        <div id="hud">
-            <span class="badge" id="status-vc">VC: OFF</span>
-            <span class="badge" id="status-user">GUEST</span>
-            <div id="pos-display">LOC: X=0.00, Z=0.00</div>
-        </div>
-
-        <div id="admin-editor">
-            <div class="editor-header">
-                <span>DIRECTORY > levels > Level0.js</span>
-                <div>
-                    <button id="btn-save-script" style="background: #007acc; color: white; border: none; cursor: pointer;">保存(SAVE)</button>
-                    <button id="btn-close-editor" style="background: transparent; color: white; border: none; cursor: pointer;">×</button>
-                </div>
+        <div id="login-overlay">
+            <div class="login-box">
+                <h1>Backrooms: DIRECTORY</h1>
+                <p class="subtitle">VER 0.1.0 - ALPHA</p>
+                <button id="btn-login" class="glitch-btn">Googleでログインして接続</button>
+                <div id="loading-spinner" style="display: none;">接続中...</div>
             </div>
-            <textarea id="code-area" spellcheck="false">// Level0.js のコードがここにロードされます</textarea>
         </div>
 
+        <div id="hud" style="display: none;">
+            <div class="stats">
+                <span id="player-name">GUEST</span>
+                <span id="coords">LOC: X=0, Z=0</span>
+            </div>
+            <div id="vc-indicator">VC: READY</div>
+        </div>
+
+        <div id="admin-panel" style="display: none;">
+            <div class="editor-header">
+                <span>DIRECTORY EDITOR</span>
+                <button id="btn-save-code">保存(SAVE)</button>
+            </div>
+            <textarea id="editor-textarea" spellcheck="false">// Level0.js のコードがここにロードされます</textarea>
+        </div>
     </div>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-                "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
-                "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
-                "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"
-            }
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+            "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js",
+            "peerjs": "https://esm.sh/peerjs@1.5.2"
         }
+    }
     </script>
 
-    <script type="module" src="./src/main.js"></script>
+    <script type="module" src="src/main.js"></script>
 
 </body>
 </html>
