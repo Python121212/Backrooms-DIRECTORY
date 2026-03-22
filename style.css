@@ -1,1 +1,113 @@
+/* 1. 基本設定：スクロールを禁止し、画面いっぱいに黒を敷く */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+    background-color: #000; 
+    color: #dbd28e; /* Backroomsの黄色に近い色 */
+    font-family: 'Courier New', Courier, monospace;
+    overflow: hidden;
+    height: 100vh;
+}
 
+/* 2. ゲームのキャンバス（最背面） */
+#game-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+}
+
+/* 3. UIレイヤー（ゲーム画面の上に重ねる） */
+#ui-wrapper {
+    position: relative;
+    width: 100%; height: 100%;
+    z-index: 10;
+    pointer-events: none; /* 下の3D操作を可能にする */
+}
+
+/* 4. ログイン画面（中央に配置） */
+#login-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: radial-gradient(circle, rgba(20,20,10,0.9) 0%, rgba(0,0,0,1) 100%);
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: auto; /* ここだけはクリック可能に */
+}
+
+.login-box {
+    text-align: center;
+    border: 1px solid #dbd28e;
+    padding: 40px;
+    background: rgba(0, 0, 0, 0.8);
+    box-shadow: 0 0 20px rgba(219, 210, 142, 0.2);
+}
+
+h1 { font-size: 2.5rem; letter-spacing: 10px; margin-bottom: 10px; }
+.subtitle { font-size: 0.8rem; color: #888; margin-bottom: 30px; }
+
+/* 5. 本気のボタンデザイン */
+.glitch-btn {
+    background: transparent;
+    color: #dbd28e;
+    border: 1px solid #dbd28e;
+    padding: 15px 30px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: inherit;
+}
+.glitch-btn:hover {
+    background: #dbd28e;
+    color: #000;
+    box-shadow: 0 0 15px #dbd28e;
+}
+
+/* 6. HUD（プレイ中の座標表示など） */
+#hud {
+    position: absolute;
+    bottom: 20px; left: 20px;
+    font-size: 12px;
+    text-shadow: 1px 1px 2px #000;
+}
+.stats span { display: block; margin-bottom: 5px; }
+
+/* 7. 管理者エディタ（画面右側にスライド表示） */
+#admin-panel {
+    position: absolute;
+    top: 0; right: 0;
+    width: 40%; height: 100%;
+    background: #1e1e1e;
+    border-left: 2px solid #333;
+    display: flex; flex-direction: column;
+    pointer-events: auto;
+    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+}
+
+.editor-header {
+    background: #252526;
+    padding: 10px;
+    display: flex; justify-content: space-between;
+    font-size: 12px;
+    border-bottom: 1px solid #444;
+}
+
+#editor-textarea {
+    flex-grow: 1;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border: none;
+    padding: 20px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    outline: none;
+    resize: none;
+}
+
+#btn-save-code {
+    background: #007acc;
+    color: white;
+    border: none;
+    padding: 2px 12px;
+    cursor: pointer;
+}
